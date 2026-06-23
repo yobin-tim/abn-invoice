@@ -89,6 +89,7 @@ if not csv_path.exists():
         "invoice_number", "date", "type", "client_name", "client_abn",
         "description", "service_date", "amount", "status",
         "due_date", "receipt_file", "notes",
+        "payment_date", "payment_ref",
     ]
     with open(csv_path, "w", newline="") as f:
         csv.DictWriter(f, fieldnames=fields).writeheader()

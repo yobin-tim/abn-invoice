@@ -1,3 +1,3 @@
 invoice_number,date,type,client_name,client_abn,description,service_date,amount,status,due_date,receipt_file,notes,payment_date,payment_ref
-INV-2026-001,2026-03-15,service,Acme Pty Ltd,12 345 678 901,Consulting services,2026-03-01,250.00,paid,2026-04-15,,, 2026-04-20,TRF-8821
+INV-2026-001,2026-03-15,service,Acme Pty Ltd,12 345 678 901,Consulting services,2026-03-01,250.00,paid,2026-04-15,,,2026-04-20,TRF-8821
 REIMB-2026-001,2026-04-02,reimbursement,Acme Pty Ltd,12 345 678 901,Office supplies purchased on behalf of client,,87.50,sent,,REIMB-2026-001_receipt.pdf,Partial reimbursement only — $12.50 outstanding,,
