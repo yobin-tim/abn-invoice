@@ -1,6 +1,8 @@
 {# Single table row. Used by index.html (via include) and returned by /generate/<id> for HTMX swaps.
-   Variables: row (dict), pdf (Path|None), result (dict|None, keys: status, message) #}
-<tr id="row-{{ row.invoice_number }}">
+   Variables: row (dict), pdf (Path|None), result (dict|None, keys: status, message), overdue (bool) #}
+<tr id="row-{{ row.invoice_number }}"
+    data-overdue="{{ '1' if overdue else '0' }}"
+    {% if overdue %}class="overdue-row"{% endif %}>
   <td><a href="{{ url_for('edit', invoice_id=row.invoice_number) }}">{{ row.invoice_number }}</a></td>
   <td>{{ row.date }}</td>
   <td>
@@ -14,7 +16,9 @@
   <td class="col-amount">${{ "%.2f" | format(row.amount | float) }}</td>
   <td>
     <span class="badge badge-{{ row.status }}">{{ row.status }}</span>
-    {% if row.payment_date %}
+    {% if overdue %}
+      <br><span style="font-size:.75em;color:#b45309;font-weight:600">overdue</span>
+    {% elif row.payment_date %}
       <br><small style="color:#888;font-size:.78em">{{ row.payment_date }}</small>
     {% endif %}
   </td>

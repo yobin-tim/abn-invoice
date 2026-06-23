@@ -74,13 +74,16 @@
   <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem">
     <label>
       Client name *
-      <input type="text" name="client_name" value="{{ row.client_name }}" required>
+      <input type="text" name="client_name" id="client_name"
+             value="{{ row.client_name }}" required
+             list="client-names" autocomplete="off">
+      <datalist id="client-names"></datalist>
     </label>
     <label>
       Client ABN
-      <input type="text" name="client_abn" value="{{ row.client_abn }}"
-             placeholder="XX XXX XXX XXX">
-      <small>Required if amount &gt; $82.50</small>
+      <input type="text" name="client_abn" id="client_abn"
+             value="{{ row.client_abn }}" placeholder="XX XXX XXX XXX">
+      <small>Required if amount &gt; $82.50 (auto-fills from past clients)</small>
     </label>
   </div>
 
@@ -164,5 +167,29 @@
   updateInvoiceNum();
 </script>
 {% endif %}
+
+<script>
+// Populate client name datalist and auto-fill ABN when a known client is selected.
+fetch('/clients')
+  .then(r => r.json())
+  .then(data => {
+    const dl = document.getElementById('client-names');
+    const abns = {};
+    data.clients.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.name;
+      dl.appendChild(opt);
+      abns[c.name] = c.abn;
+    });
+    document.getElementById('client_name').addEventListener('change', function() {
+      const abn = abns[this.value];
+      // Only overwrite if the ABN field is currently empty
+      if (abn) {
+        const abnField = document.getElementById('client_abn');
+        if (!abnField.value) abnField.value = abn;
+      }
+    });
+  });
+</script>
 
 {% endblock %}

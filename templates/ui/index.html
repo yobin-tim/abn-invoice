@@ -24,6 +24,28 @@
   </div>
 </details>
 
+{# ── YTD summary ─────────────────────────────────────────────────────────────── #}
+{% if rows %}
+<div class="summary-bar">
+  <div>
+    <strong>${{ "%.2f" | format(summary.total) }}</strong>
+    <small>total invoiced</small>
+  </div>
+  <div>
+    <strong style="color:#166534">${{ "%.2f" | format(summary.paid) }}</strong>
+    <small>received</small>
+  </div>
+  <div>
+    <strong style="color:#1d4ed8">${{ "%.2f" | format(summary.sent) }}</strong>
+    <small>awaiting payment</small>
+  </div>
+  <div>
+    <strong style="color:#888">${{ "%.2f" | format(summary.draft) }}</strong>
+    <small>draft (unsent)</small>
+  </div>
+</div>
+{% endif %}
+
 {# ── Bulk generate bar ──────────────────────────────────────────────────────── #}
 <form class="bulk-bar" method="post" action="{{ url_for('generate_bulk') }}">
   <strong>Bulk generate:</strong>
@@ -36,7 +58,24 @@
     Force overwrite existing PDFs
   </label>
   <button type="submit">Run</button>
+  {% if rows %}
+    <a href="{{ url_for('export_csv') }}"
+       style="margin-left:auto;padding:.35rem .9rem;font-size:.82rem"
+       role="button" class="outline secondary">Export CSV</a>
+  {% endif %}
 </form>
+
+{# ── Filter bar ──────────────────────────────────────────────────────────────── #}
+{% if rows %}
+<div class="filter-bar">
+  <span style="font-size:.82rem;color:#888">Filter:</span>
+  <button type="button" class="filter-btn active" onclick="filterRows('all', this)">All</button>
+  <button type="button" class="filter-btn" onclick="filterRows('draft', this)">Draft</button>
+  <button type="button" class="filter-btn" onclick="filterRows('sent', this)">Sent</button>
+  <button type="button" class="filter-btn" onclick="filterRows('paid', this)">Paid</button>
+  <button type="button" class="filter-btn" onclick="filterRows('overdue', this)">Overdue</button>
+</div>
+{% endif %}
 
 {# ── Transaction table ──────────────────────────────────────────────────────── #}
 {% if rows %}
@@ -54,15 +93,15 @@
         <th class="col-actions">Actions</th>
       </tr>
     </thead>
-    <tbody>
-      {% for row, pdf in rows %}
+    <tbody id="tx-tbody">
+      {% for row, pdf, overdue in rows %}
         {% include "ui/_row.html" %}
       {% endfor %}
     </tbody>
   </table>
 </div>
 
-<p style="font-size:.85rem;color:#888;margin-top:.5rem">
+<p style="font-size:.85rem;color:#888;margin-top:.5rem" id="row-count">
   {{ rows | length }} transaction{{ 's' if rows | length != 1 else '' }}
   &nbsp;·&nbsp;
   {{ rows | selectattr('1') | list | length }} PDF{{ 's' if rows | selectattr('1') | list | length != 1 else '' }} on disk
@@ -84,5 +123,35 @@
 </div>
 
 {% endif %}
+
+<script>
+function filterRows(status, btn) {
+  // Update active button
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  // Show/hide rows
+  const rows = document.querySelectorAll('#tx-tbody tr');
+  let visible = 0;
+  rows.forEach(tr => {
+    let show;
+    if (status === 'all') {
+      show = true;
+    } else if (status === 'overdue') {
+      show = tr.dataset.overdue === '1';
+    } else {
+      show = tr.querySelector('.badge-' + status) !== null;
+    }
+    tr.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+
+  // Update the count line
+  const countEl = document.getElementById('row-count');
+  if (countEl) {
+    countEl.textContent = visible + ' transaction' + (visible !== 1 ? 's' : '') + ' shown';
+  }
+}
+</script>
 
 {% endblock %}

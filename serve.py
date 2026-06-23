@@ -107,6 +107,35 @@ def form_to_dict(form) -> dict:
     return {k: form.get(k, "").strip() for k in gi.CSV_FIELDS}
 
 
+def is_overdue(row: dict) -> bool:
+    """True if due_date has passed and the invoice is not yet paid."""
+    if row.get("status") == "paid":
+        return False
+    due = row.get("due_date", "").strip()
+    if not due:
+        return False
+    # ISO date strings sort lexicographically, so string comparison works correctly.
+    return due < datetime.today().strftime("%Y-%m-%d")
+
+
+def compute_summary(rows: list[dict]) -> dict:
+    """Aggregate totals across the active profile's transactions."""
+
+    def amt(r):
+        try:
+            return float(r.get("amount") or 0)
+        except ValueError:
+            return 0.0
+
+    return {
+        "count": len(rows),
+        "total": sum(amt(r) for r in rows),
+        "paid": sum(amt(r) for r in rows if r.get("status") == "paid"),
+        "sent": sum(amt(r) for r in rows if r.get("status") == "sent"),
+        "draft": sum(amt(r) for r in rows if r.get("status") == "draft"),
+    }
+
+
 def _bank_status(profile_id: str) -> dict:
     """Return masked display info for the bank details of a profile."""
     bsb = keyring.get_password("abn-invoice", f"{profile_id}:bsb") or ""
@@ -129,8 +158,12 @@ def _bank_status(profile_id: str) -> dict:
 @app.route("/")
 def index():
     rows = all_rows()
-    rows_with_pdf = [(row, find_pdf(row["invoice_number"], row)) for row in rows]
-    return render_template("ui/index.html", rows=rows_with_pdf)
+    rows_data = [
+        (row, find_pdf(row["invoice_number"], row), is_overdue(row)) for row in rows
+    ]
+    return render_template(
+        "ui/index.html", rows=rows_data, summary=compute_summary(rows)
+    )
 
 
 @app.route("/generate/<invoice_id>", methods=["POST"])
@@ -156,7 +189,9 @@ def generate_one(invoice_id):
     result = {"status": status, "message": message}
 
     if request.headers.get("HX-Request"):
-        return render_template("ui/_row.html", row=row, pdf=pdf, result=result)
+        return render_template(
+            "ui/_row.html", row=row, pdf=pdf, result=result, overdue=is_overdue(row)
+        )
 
     flash(message, "success" if status in ("ok", "skip") else "error")
     return redirect(url_for("index"))
@@ -208,6 +243,33 @@ def view_pdf(invoice_id):
         flash(f"No PDF for {invoice_id} — generate it first.", "error")
         return redirect(url_for("index"))
     return send_file(pdf, mimetype="application/pdf")
+
+
+@app.route("/export/csv")
+def export_csv():
+    """Download the active profile's transactions.csv."""
+    if not gi.TRANSACTIONS.exists():
+        flash("No transactions to export.", "error")
+        return redirect(url_for("index"))
+    pid = gi.get_active_profile()[0]
+    return send_file(
+        gi.TRANSACTIONS,
+        as_attachment=True,
+        download_name=f"transactions-{pid}.csv",
+        mimetype="text/csv",
+    )
+
+
+@app.route("/clients")
+def client_list():
+    """Return distinct client names and ABNs from the active profile (for autocomplete)."""
+    seen: dict[str, str] = {}
+    for r in all_rows():
+        name = r.get("client_name", "").strip()
+        if name and name not in seen:
+            seen[name] = r.get("client_abn", "").strip()
+    clients = [{"name": k, "abn": v} for k, v in sorted(seen.items())]
+    return jsonify({"clients": clients})
 
 
 @app.route("/autoinvoicenum")
