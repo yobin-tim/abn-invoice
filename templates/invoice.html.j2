@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="UTF-8">
+  <title>{% if tx.type == "service" %}Invoice{% else %}Reimbursement Claim{% endif %} — {{ tx.invoice_number }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    @page { size: A4; margin: 20mm; }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-size: 10.5pt;
+      color: #1a1a1a;
+      line-height: 1.5;
+      max-width: 720px;
+      margin: 40px auto;
+      padding: 0 24px;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #1a1a1a;
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+
+    .header-left h1 {
+      font-size: 20pt;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin: 0 0 6px;
+      text-transform: uppercase;
+    }
+
+    .header-left p { margin: 2px 0; font-size: 10pt; }
+
+    .meta-table td { padding: 2px 8px 2px 0; font-size: 10pt; }
+    .meta-table td:first-child { color: #666; white-space: nowrap; }
+    .meta-table td:last-child { font-weight: 600; }
+
+    /* ── Parties ─────────────────────────────────────────── */
+    .parties {
+      display: flex;
+      gap: 40px;
+      margin-bottom: 28px;
+    }
+
+    .party { flex: 1; }
+
+    .party h2 {
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #888;
+      margin: 0 0 4px;
+    }
+
+    .party p { margin: 2px 0; }
+
+    /* ── Reimbursement notice ────────────────────────────── */
+    .reimb-notice {
+      background: #fffbea;
+      border: 1px solid #e8d84a;
+      border-radius: 4px;
+      padding: 10px 14px;
+      font-size: 9pt;
+      color: #7a6400;
+      margin-bottom: 24px;
+    }
+
+    /* ── Line items ─────────────────────────────────────── */
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 6px;
+    }
+
+    .items-table thead th {
+      background: #f4f4f4;
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 8.5pt;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #555;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .items-table thead th:last-child { text-align: right; }
+
+    .items-table tbody td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+      vertical-align: top;
+    }
+
+    .items-table tbody td:last-child { text-align: right; white-space: nowrap; }
+
+    .items-table tfoot td {
+      padding: 8px 12px;
+      font-weight: 700;
+      font-size: 11pt;
+      border-top: 2px solid #1a1a1a;
+    }
+
+    .items-table tfoot td:last-child { text-align: right; }
+
+    .gst-note {
+      font-size: 8.5pt;
+      color: #888;
+      font-style: italic;
+      margin: 4px 0 28px;
+    }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    .footer-sections {
+      display: flex;
+      gap: 40px;
+      border-top: 1px solid #ddd;
+      padding-top: 20px;
+      margin-top: 12px;
+    }
+
+    .footer-section { flex: 1; }
+
+    .footer-section h3 {
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #888;
+      margin: 0 0 6px;
+    }
+
+    .footer-section p { margin: 2px 0; font-size: 10pt; }
+  </style>
+</head>
+<body>
+
+  <!-- Header: document type + invoice metadata -->
+  <header class="header">
+    <div class="header-left">
+      <h1>{% if tx.type == "service" %}Invoice{% else %}Reimbursement Claim{% endif %}</h1>
+      <p><strong>{{ my_name }}</strong></p>
+      <p>ABN {{ my_abn }}</p>
+    </div>
+    <div class="header-right">
+      <table class="meta-table">
+        <tr>
+          <td>{{ "Invoice" if tx.type == "service" else "Claim" }} No</td>
+          <td>{{ tx.invoice_number }}</td>
+        </tr>
+        <tr>
+          <td>Date</td>
+          <td>{{ tx_date }}</td>
+        </tr>
+        {% if service_date %}
+        <tr>
+          <td>Service date</td>
+          <td>{{ service_date }}</td>
+        </tr>
+        {% endif %}
+        {% if due_date %}
+        <tr>
+          <td>Due</td>
+          <td>{{ due_date }}</td>
+        </tr>
+        {% endif %}
+      </table>
+    </div>
+  </header>
+
+  <!-- Reimbursements get an explicit notice so the client understands the document type -->
+  {% if tx.type == "reimbursement" %}
+  <div class="reimb-notice">
+    This is not a tax invoice. It is a claim for reimbursement of out-of-pocket costs
+    incurred on behalf of the organisation. The original receipt/proof of purchase is attached.
+  </div>
+  {% endif %}
+
+  <!-- From / To -->
+  <div class="parties">
+    <div class="party">
+      <h2>From</h2>
+      <p><strong>{{ my_name }}</strong></p>
+      <p>ABN {{ my_abn }}</p>
+    </div>
+    <div class="party">
+      <h2>To</h2>
+      <p><strong>{{ tx.client_name }}</strong></p>
+      {% if tx.client_abn %}<p>ABN {{ tx.client_abn }}</p>{% endif %}
+    </div>
+  </div>
+
+  <!-- Line items — currently one row per transaction; extend as needed -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th>Amount (AUD)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{ tx.description }}</td>
+        <td>${{ "%.2f" | format(tx.amount | float) }}</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td>Total Payable</td>
+        <td>${{ "%.2f" | format(tx.amount | float) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  {% if tx.type == "service" %}
+  <p class="gst-note">
+    No GST has been charged. {{ my_name }} (ABN {{ my_abn }}) is not registered for GST.
+  </p>
+  {% else %}
+  <p class="gst-note">
+    Amount reflects actual cost paid. No GST is charged on reimbursements.
+  </p>
+  {% endif %}
+
+  <!-- Payment details, receipt reference, and optional notes -->
+  <div class="footer-sections">
+    <div class="footer-section">
+      <h3>{% if tx.type == "service" %}Payment Details{% else %}Reimburse To{% endif %}</h3>
+      <p>BSB: {{ bank.bsb }}</p>
+      <p>Account: {{ bank.account }}</p>
+      <p>Account name: {{ bank.account_name }}</p>
+    </div>
+    {% if receipt_file %}
+    <div class="footer-section">
+      <h3>Attached Receipt</h3>
+      <p>{{ receipt_file }}</p>
+    </div>
+    {% endif %}
+    {% if tx.notes %}
+    <div class="footer-section">
+      <h3>Notes</h3>
+      <p>{{ tx.notes }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+</body>
+</html>

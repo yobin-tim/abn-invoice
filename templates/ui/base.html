@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en-AU" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ABN Invoices{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+  <style>
+    :root { --spacing: 1rem; }
+
+    nav { display: flex; justify-content: space-between; align-items: center;
+          border-bottom: 1px solid var(--pico-muted-border-color); padding-bottom: .75rem;
+          margin-bottom: 1.5rem; }
+    nav strong { font-size: 1.1rem; }
+    nav .nav-actions { display: flex; gap: .5rem; }
+
+    /* Status / type badges */
+    .badge {
+      display: inline-block; padding: .15em .55em; border-radius: 999px;
+      font-size: .78em; font-weight: 600; letter-spacing: .02em; white-space: nowrap;
+    }
+    .badge-draft    { background: #f0f0f0; color: #555; }
+    .badge-sent     { background: #dbeafe; color: #1d4ed8; }
+    .badge-paid     { background: #dcfce7; color: #166534; }
+    .badge-service  { background: #ede9fe; color: #5b21b6; }
+    .badge-reimb    { background: #fff7ed; color: #9a3412; }
+
+    /* Result flash inline in table row */
+    .row-result { font-size: .8em; color: #666; font-style: italic; }
+    .row-result.ok   { color: #166534; }
+    .row-result.skip { color: #555; }
+    .row-result.fail { color: #b91c1c; }
+
+    /* Compact table */
+    table { font-size: .9rem; }
+    td, th { vertical-align: middle; }
+    .col-actions { white-space: nowrap; text-align: right; }
+    .col-amount  { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    /* Flashed messages */
+    .flash-list { list-style: none; padding: 0; margin-bottom: 1rem; }
+    .flash-list li { padding: .6rem 1rem; border-radius: 4px; margin-bottom: .4rem; }
+    .flash-success { background: #dcfce7; color: #166534; }
+    .flash-warning { background: #fef9c3; color: #854d0e; }
+    .flash-error   { background: #fee2e2; color: #991b1b; }
+
+    /* Bulk generate bar */
+    .bulk-bar { display: flex; gap: .75rem; align-items: center;
+                padding: .75rem 1rem; background: var(--pico-card-background-color);
+                border: 1px solid var(--pico-muted-border-color);
+                border-radius: 6px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .bulk-bar label { margin: 0; font-size: .9rem; display: flex; align-items: center; gap: .3rem; }
+    .bulk-bar button { margin: 0; padding: .35rem .9rem; }
+
+    /* Smaller action buttons in table */
+    table button, table a[role="button"] {
+      padding: .25rem .65rem; font-size: .82rem; margin: 0 .15rem; display: inline-block;
+    }
+  </style>
+</head>
+<body>
+<main class="container">
+
+  <nav>
+    <strong><a href="{{ url_for('index') }}" style="text-decoration:none;color:inherit">ABN Invoices</a></strong>
+    <div class="nav-actions">
+      <a href="{{ url_for('add') }}" role="button" class="outline">+ Add</a>
+    </div>
+  </nav>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <ul class="flash-list">
+    {% for category, message in messages %}
+    <li class="flash-{{ category }}">{{ message }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+
+</main>
+</body>
+</html>

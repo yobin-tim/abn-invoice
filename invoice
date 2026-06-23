@@ -1,0 +1,12 @@
+#!/bin/zsh
+# Wrapper: runs scripts under the conda base env where jinja2 and flask live.
+# Usage: ./invoice generate INV-2026-001
+#        ./invoice add
+#        ./invoice status [--stale-days N]
+#        ./invoice serve [--port 5001]
+if [[ "$1" == "serve" ]]; then
+  shift
+  exec /opt/anaconda3/bin/python3 "$(dirname "$0")/serve.py" "$@"
+else
+  exec /opt/anaconda3/bin/python3 "$(dirname "$0")/generate_invoice.py" "$@"
+fi

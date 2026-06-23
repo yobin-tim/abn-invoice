@@ -1,0 +1,55 @@
+{% extends "ui/base.html" %}
+
+{% block title %}ABN Invoices — Dashboard{% endblock %}
+
+{% block content %}
+
+{# ── Bulk generate bar ──────────────────────────────────────────────────────── #}
+<form class="bulk-bar" method="post" action="{{ url_for('generate_bulk') }}">
+  <strong>Bulk generate:</strong>
+  <label>
+    <input type="checkbox" name="new_only" value="1" checked>
+    New / draft only
+  </label>
+  <label>
+    <input type="checkbox" name="force" value="1">
+    Force overwrite
+  </label>
+  <button type="submit">Run</button>
+</form>
+
+{# ── Transaction table ──────────────────────────────────────────────────────── #}
+{% if rows %}
+<div style="overflow-x:auto">
+  <table>
+    <thead>
+      <tr>
+        <th>Invoice #</th>
+        <th>Date</th>
+        <th>Type</th>
+        <th>Client</th>
+        <th class="col-amount">Amount</th>
+        <th>Status</th>
+        <th style="text-align:center">PDF</th>
+        <th class="col-actions">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row, pdf in rows %}
+        {% include "ui/_row.html" %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p style="font-size:.85rem;color:#888;margin-top:.5rem">
+  {{ rows | length }} transaction{{ 's' if rows | length != 1 else '' }}
+  &nbsp;·&nbsp;
+  {{ rows | selectattr('1') | list | length }} PDF{{ 's' if rows | selectattr('1') | list | length != 1 else '' }} on disk
+</p>
+
+{% else %}
+<p>No transactions yet. <a href="{{ url_for('add') }}">Add one.</a></p>
+{% endif %}
+
+{% endblock %}

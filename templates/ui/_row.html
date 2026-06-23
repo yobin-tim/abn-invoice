@@ -1,0 +1,41 @@
+{# Single table row. Used by index.html (via include) and returned by /generate/<id> for HTMX swaps.
+   Variables: row (dict), pdf (Path|None), result (dict|None, keys: status, message) #}
+<tr id="row-{{ row.invoice_number }}">
+  <td><a href="{{ url_for('edit', invoice_id=row.invoice_number) }}">{{ row.invoice_number }}</a></td>
+  <td>{{ row.date }}</td>
+  <td>
+    {% if row.type == "service" %}
+      <span class="badge badge-service">service</span>
+    {% else %}
+      <span class="badge badge-reimb">reimb.</span>
+    {% endif %}
+  </td>
+  <td>{{ row.client_name }}</td>
+  <td class="col-amount">${{ "%.2f" | format(row.amount | float) }}</td>
+  <td><span class="badge badge-{{ row.status }}">{{ row.status }}</span></td>
+  <td style="text-align:center">
+    {% if pdf %}✓{% else %}–{% endif %}
+    {% if result %}
+      <br><span class="row-result {{ result.status }}">{{ result.message }}</span>
+    {% endif %}
+  </td>
+  <td class="col-actions">
+    <form style="display:inline"
+          hx-post="{{ url_for('generate_one', invoice_id=row.invoice_number) }}"
+          hx-target="#row-{{ row.invoice_number }}"
+          hx-swap="outerHTML"
+          hx-indicator="#row-{{ row.invoice_number }}">
+      {% if pdf %}
+        <button type="submit" name="force" value="1" class="outline">Re-gen</button>
+      {% else %}
+        <button type="submit">Generate</button>
+      {% endif %}
+    </form>
+    {% if pdf %}
+      <a href="{{ url_for('view_pdf', invoice_id=row.invoice_number) }}"
+         role="button" class="outline" target="_blank">View</a>
+    {% endif %}
+    <a href="{{ url_for('edit', invoice_id=row.invoice_number) }}"
+       role="button" class="secondary outline">Edit</a>
+  </td>
+</tr>

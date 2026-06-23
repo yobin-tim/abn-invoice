@@ -1,0 +1,152 @@
+{% extends "ui/base.html" %}
+
+{% block title %}{{ "Add transaction" if is_new else "Edit " ~ invoice_id }}{% endblock %}
+
+{% block content %}
+
+<h2>{{ "Add transaction" if is_new else "Edit " ~ invoice_id }}</h2>
+
+{% if errors %}
+<div class="flash-error" style="padding:.75rem 1rem;border-radius:4px;margin-bottom:1rem">
+  <strong>Validation issues:</strong>
+  <ul style="margin:.4rem 0 0 1.2rem;padding:0">
+    {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+  </ul>
+  <p style="margin:.6rem 0 0;font-size:.9rem">Fix the issues above, or submit again to save anyway.</p>
+</div>
+{% endif %}
+
+<form method="post">
+
+  {# ── Invoice number ─────────────────────────────────────────────────────── #}
+  <label>
+    Invoice number
+    {% if is_new %}
+      <input type="text" name="invoice_number" value="{{ row.invoice_number }}"
+             id="invoice_number" placeholder="e.g. INV-2026-002" required>
+      <small>Auto-fills when you choose a type and date below.</small>
+    {% else %}
+      <input type="text" value="{{ invoice_id }}" readonly disabled>
+      <input type="hidden" name="invoice_number" value="{{ invoice_id }}">
+    {% endif %}
+  </label>
+
+  {# ── Type and status side-by-side ───────────────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+    <label>
+      Type
+      <select name="type" id="tx_type" required>
+        {% for opt in ["service", "reimbursement"] %}
+          <option value="{{ opt }}" {{ "selected" if row.type == opt else "" }}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Status
+      <select name="status" required>
+        {% for opt in ["draft", "sent", "paid"] %}
+          <option value="{{ opt }}" {{ "selected" if row.status == opt else "" }}>{{ opt }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+
+  {# ── Dates ──────────────────────────────────────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+    <label>
+      Invoice date *
+      <input type="date" name="date" id="invoice_date"
+             value="{{ row.date }}" required>
+    </label>
+    <label>
+      Service date
+      <input type="date" name="service_date" value="{{ row.service_date }}">
+      <small>Optional — when work was done</small>
+    </label>
+    <label>
+      Due date
+      <input type="date" name="due_date" value="{{ row.due_date }}">
+      <small>Optional</small>
+    </label>
+  </div>
+
+  {# ── Client ─────────────────────────────────────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem">
+    <label>
+      Client name *
+      <input type="text" name="client_name" value="{{ row.client_name }}" required>
+    </label>
+    <label>
+      Client ABN
+      <input type="text" name="client_abn" value="{{ row.client_abn }}"
+             placeholder="XX XXX XXX XXX">
+      <small>Required if amount &gt; $82.50</small>
+    </label>
+  </div>
+
+  {# ── Description and amount ─────────────────────────────────────────────── #}
+  <label>
+    Description *
+    <textarea name="description" required rows="2">{{ row.description }}</textarea>
+  </label>
+
+  <label style="max-width:14rem">
+    Amount (AUD) *
+    <input type="number" name="amount" value="{{ row.amount }}"
+           step="0.01" min="0" required>
+  </label>
+
+  {# ── Receipt and notes ──────────────────────────────────────────────────── #}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+    <label>
+      Receipt filename
+      <input type="text" name="receipt_file" value="{{ row.receipt_file }}"
+             placeholder="REIMB-2026-001_receipt.pdf">
+      <small>Filename only, no path. Must be in Invoices/&lt;FY&gt;/</small>
+    </label>
+    <label>
+      Notes
+      <input type="text" name="notes" value="{{ row.notes }}">
+    </label>
+  </div>
+
+  {# ── Submit ─────────────────────────────────────────────────────────────── #}
+  <div style="display:flex;gap:.75rem;margin-top:1.5rem;align-items:center">
+    <button type="submit">Save</button>
+    {% if errors %}
+      <button type="submit" name="force_save" value="1" class="secondary">Save anyway</button>
+    {% endif %}
+    <a href="{{ url_for('index') }}">Cancel</a>
+  </div>
+
+</form>
+
+{% if is_new %}
+<script>
+  // Auto-fill invoice number when type or date changes
+  function updateInvoiceNum() {
+    const type = document.getElementById("tx_type").value;
+    const dateVal = document.getElementById("invoice_date").value;
+    if (!dateVal) return;
+    const year = new Date(dateVal).getFullYear();
+    fetch(`/autoinvoicenum?type=${encodeURIComponent(type)}&year=${year}`)
+      .then(r => r.json())
+      .then(d => {
+        const el = document.getElementById("invoice_number");
+        // Only overwrite if the user hasn't manually edited it
+        if (!el.dataset.userEdited) el.value = d.number;
+      });
+  }
+
+  document.getElementById("tx_type").addEventListener("change", updateInvoiceNum);
+  document.getElementById("invoice_date").addEventListener("change", updateInvoiceNum);
+  document.getElementById("invoice_number").addEventListener("input", function() {
+    this.dataset.userEdited = "1";
+  });
+
+  // Run once on page load to pre-fill if date is already set
+  updateInvoiceNum();
+</script>
+{% endif %}
+
+{% endblock %}

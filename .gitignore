@@ -1,0 +1,14 @@
+# Personal data — never commit these
+config.py
+transactions.csv
+Invoices/*
+!Invoices/.gitkeep
+logs/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
