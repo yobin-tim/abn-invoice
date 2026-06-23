@@ -70,28 +70,44 @@
         {% endif %}
       </summary>
       <form method="post" action="{{ url_for('settings_bank', profile_id=pid) }}"
-            style="margin-top:.75rem">
+            autocomplete="off" style="margin-top:.75rem">
+        <p class="hint" style="margin-bottom:.5rem">
+          These values are saved to your <strong>system keychain</strong> (macOS Keychain Access
+          or Windows Credential Manager) — not to any file on disk, and not to your browser.
+          If your browser asks to save a password, dismiss it; the real save has already happened.
+        </p>
         <p class="hint" style="margin-bottom:.75rem">
-          Stored securely in your system keychain — never written to any file on disk.
-          Leave a field blank to keep the existing value.
+          Leave a field blank to keep the existing value. Use the Show button to verify what you typed.
         </p>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
           <label>
             BSB
-            <input type="password" name="bsb" autocomplete="off"
-                   placeholder="{{ bs.bsb_hint or 'e.g. 032-002' }}">
-            <small>Your bank's branch number</small>
+            <div class="reveal-wrap">
+              <input type="password" name="bsb" id="bsb_{{ pid }}"
+                     autocomplete="new-password"
+                     placeholder="{{ bs.bsb_hint or 'e.g. 032-002' }}">
+              <button type="button" class="outline reveal-btn secondary"
+                      onclick="toggleReveal('bsb_{{ pid }}', this)">Show</button>
+            </div>
+            <small>Your bank's branch sort code</small>
           </label>
           <label>
             Account number
-            <input type="password" name="account_number" autocomplete="off"
-                   placeholder="{{ bs.account_hint or 'e.g. 123456789' }}">
+            <div class="reveal-wrap">
+              <input type="password" name="account_number" id="acct_{{ pid }}"
+                     autocomplete="new-password"
+                     placeholder="{{ bs.account_hint or 'e.g. 123456789' }}">
+              <button type="button" class="outline reveal-btn secondary"
+                      onclick="toggleReveal('acct_{{ pid }}', this)">Show</button>
+            </div>
           </label>
           <label>
             Account name
             <input type="text" name="account_name"
                    value="{{ bs.account_name }}"
-                   placeholder="Name on the account">
+                   placeholder="Name on the account"
+                   autocomplete="off">
+            <small>As it appears on your bank account</small>
           </label>
         </div>
         <button type="submit" style="margin-top:.5rem">Save to keychain</button>
@@ -149,5 +165,13 @@
     <button type="submit" style="margin-top:.75rem">Create profile</button>
   </form>
 </section>
+
+<script>
+function toggleReveal(id, btn) {
+  const inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? 'Show' : 'Hide';
+}
+</script>
 
 {% endblock %}

@@ -96,19 +96,35 @@
            step="0.01" min="0" required>
   </label>
 
-  {# ── Receipt and notes ──────────────────────────────────────────────────── #}
+  {# ── Receipt (reimbursements only) ─────────────────────────────────────── #}
+  <label>
+    Receipt filename
+    <input type="text" name="receipt_file" value="{{ row.receipt_file }}"
+           placeholder="REIMB-2026-001_receipt.pdf">
+    <small>Filename only — file must be in <code>data/&lt;profile&gt;/Invoices/&lt;FY&gt;/</code></small>
+  </label>
+
+  {# ── Payment (fill when marking as paid) ────────────────────────────────── #}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
     <label>
-      Receipt filename
-      <input type="text" name="receipt_file" value="{{ row.receipt_file }}"
-             placeholder="REIMB-2026-001_receipt.pdf">
-      <small>Filename only, no path. Must be in Invoices/&lt;FY&gt;/</small>
+      Payment date
+      <input type="date" name="payment_date" value="{{ row.payment_date }}">
+      <small>Date payment was received. Fill when marking status as <strong>paid</strong>.</small>
     </label>
     <label>
-      Notes
-      <input type="text" name="notes" value="{{ row.notes }}">
+      Payment reference
+      <input type="text" name="payment_ref" value="{{ row.payment_ref }}"
+             placeholder="e.g. TRF-8821, cheque #">
+      <small>Bank transfer reference, cheque number, or other identifier.</small>
     </label>
   </div>
+
+  {# ── Notes ──────────────────────────────────────────────────────────────── #}
+  <label>
+    Notes
+    <textarea name="notes" rows="3"
+              placeholder="Partial payment details, outstanding balance, client contact, follow-up dates — anything relevant to this transaction.">{{ row.notes }}</textarea>
+  </label>
 
   {# ── Submit ─────────────────────────────────────────────────────────────── #}
   <div style="display:flex;gap:.75rem;margin-top:1.5rem;align-items:center">

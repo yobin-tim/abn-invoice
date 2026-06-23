@@ -117,6 +117,8 @@ CSV_FIELDS = [
     "due_date",
     "receipt_file",
     "notes",
+    "payment_date",  # date payment received (YYYY-MM-DD); fill when marking paid
+    "payment_ref",  # bank transfer reference number or cheque number
 ]
 
 

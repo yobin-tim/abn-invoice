@@ -12,7 +12,12 @@
   </td>
   <td>{{ row.client_name }}</td>
   <td class="col-amount">${{ "%.2f" | format(row.amount | float) }}</td>
-  <td><span class="badge badge-{{ row.status }}">{{ row.status }}</span></td>
+  <td>
+    <span class="badge badge-{{ row.status }}">{{ row.status }}</span>
+    {% if row.payment_date %}
+      <br><small style="color:#888;font-size:.78em">{{ row.payment_date }}</small>
+    {% endif %}
+  </td>
   <td style="text-align:center">
     {% if pdf %}✓{% else %}–{% endif %}
     {% if result %}
