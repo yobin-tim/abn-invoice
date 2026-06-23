@@ -10,6 +10,7 @@ CSV helpers) is reused directly — no subprocess calls needed.
 """
 
 import csv
+import re
 import secrets
 import sys
 import webbrowser
@@ -18,17 +19,21 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-from flask import (
-    Flask,
-    abort,
-    flash,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    send_file,
-    url_for,
-)
+try:
+    import keyring
+    from flask import (
+        Flask,
+        abort,
+        flash,
+        jsonify,
+        redirect,
+        render_template,
+        request,
+        send_file,
+        url_for,
+    )
+except ImportError as e:
+    sys.exit(f"Missing dependency ({e}) — run: uv sync")
 
 # generate_invoice.py lives alongside this file
 ABN_DIR = Path(__file__).parent
@@ -41,11 +46,25 @@ app = Flask(__name__, template_folder=str(ABN_DIR / "templates"))
 app.secret_key = secrets.token_hex(32)
 
 
+# ── Profile context ───────────────────────────────────────────────────────────
+
+
+@app.context_processor
+def inject_profile():
+    """Inject active profile and full profiles list into every template."""
+    try:
+        pid, profile = gi.get_active_profile()
+        all_profiles = gi.load_profiles().get("profiles", {})
+        return {"active_profile": {"id": pid, **profile}, "all_profiles": all_profiles}
+    except SystemExit:
+        return {"active_profile": None, "all_profiles": {}}
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 def all_rows() -> list[dict]:
-    """All rows from transactions.csv, or [] if the file does not exist."""
+    """All rows from the active profile's transactions.csv, or [] if missing."""
     if not gi.TRANSACTIONS.exists():
         return []
     return list(gi.iter_transactions())
@@ -74,7 +93,7 @@ def update_row(invoice_number: str, updated: dict) -> None:
 
 
 def append_row(data: dict) -> None:
-    """Append a new row to transactions.csv."""
+    """Append a new row to the active profile's transactions.csv."""
     write_header = not gi.TRANSACTIONS.exists() or gi.TRANSACTIONS.stat().st_size == 0
     with open(gi.TRANSACTIONS, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=gi.CSV_FIELDS)
@@ -88,13 +107,28 @@ def form_to_dict(form) -> dict:
     return {k: form.get(k, "").strip() for k in gi.CSV_FIELDS}
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+def _bank_status(profile_id: str) -> dict:
+    """Return masked display info for the bank details of a profile."""
+    bsb = keyring.get_password("abn-invoice", f"{profile_id}:bsb") or ""
+    acct = keyring.get_password("abn-invoice", f"{profile_id}:account_number") or ""
+    acct_name = keyring.get_password("abn-invoice", f"{profile_id}:account_name") or ""
+    return {
+        "bsb_set": bool(bsb),
+        "bsb_hint": f"****{bsb[-3:]}" if len(bsb) >= 3 else ("set" if bsb else ""),
+        "account_set": bool(acct),
+        "account_hint": f"****{acct[-4:]}"
+        if len(acct) >= 4
+        else ("set" if acct else ""),
+        "account_name": acct_name,
+    }
+
+
+# ── Transaction routes ────────────────────────────────────────────────────────
 
 
 @app.route("/")
 def index():
     rows = all_rows()
-    # Pair each row with its PDF path (or None) for the table
     rows_with_pdf = [(row, find_pdf(row["invoice_number"], row)) for row in rows]
     return render_template("ui/index.html", rows=rows_with_pdf)
 
@@ -109,10 +143,8 @@ def generate_one(invoice_id):
             invoice_id, force=force, if_missing=False, dry_run=False
         )
     except SystemExit as e:
-        # generate() calls sys.exit() only if the invoice row is not found
         status, message = "fail", str(e)
 
-    # Re-read the row so the partial reflects any state changes
     row = next(
         (r for r in gi.iter_transactions() if r["invoice_number"] == invoice_id),
         None,
@@ -123,7 +155,6 @@ def generate_one(invoice_id):
     pdf = find_pdf(invoice_id, row)
     result = {"status": status, "message": message}
 
-    # HTMX request: return just the updated <tr> so it can swap in-place
     if request.headers.get("HX-Request"):
         return render_template("ui/_row.html", row=row, pdf=pdf, result=result)
 
@@ -219,7 +250,7 @@ def edit(invoice_id):
 
     if request.method == "POST":
         updated = form_to_dict(request.form)
-        updated["invoice_number"] = invoice_id  # keep original; field is read-only
+        updated["invoice_number"] = invoice_id
         errors = gi.validate_row(updated)
         force_save = request.form.get("force_save") == "1"
         if errors and not force_save:
@@ -239,6 +270,130 @@ def edit(invoice_id):
     )
 
 
+# ── Settings routes ───────────────────────────────────────────────────────────
+
+
+@app.route("/settings")
+def settings():
+    """Profile management page: edit identity, set bank details, switch profiles."""
+    data = gi.load_profiles()
+    bank_status = {pid: _bank_status(pid) for pid in data.get("profiles", {})}
+    return render_template(
+        "ui/settings.html",
+        profiles=data.get("profiles", {}),
+        active=data.get("active", ""),
+        bank_status=bank_status,
+    )
+
+
+@app.route("/settings/profile", methods=["POST"])
+def settings_profile():
+    """Create a new profile or update an existing one (name + ABN only)."""
+    profile_id = request.form.get("profile_id", "").strip().lower()
+    name = request.form.get("name", "").strip()
+    abn = request.form.get("abn", "").strip()
+    is_new = request.form.get("is_new") == "1"
+
+    if not profile_id or not name or not abn:
+        flash("Profile ID, name, and ABN are all required.", "error")
+        return redirect(url_for("settings"))
+    if not re.match(r"^[a-z0-9_-]+$", profile_id):
+        flash(
+            "Profile ID must be lowercase letters, numbers, hyphens, or underscores.",
+            "error",
+        )
+        return redirect(url_for("settings"))
+
+    data = gi.load_profiles()
+    if is_new and profile_id in data.get("profiles", {}):
+        flash(f"Profile '{profile_id}' already exists.", "error")
+        return redirect(url_for("settings"))
+
+    data.setdefault("profiles", {})[profile_id] = {
+        **data["profiles"].get(profile_id, {}),
+        "name": name,
+        "abn": abn,
+    }
+
+    # Create the data directory and empty ledger for new profiles.
+    if is_new:
+        data_dir = gi.BASE_DIR / "data" / profile_id
+        (data_dir / "Invoices").mkdir(parents=True, exist_ok=True)
+        csv_path = data_dir / "transactions.csv"
+        if not csv_path.exists():
+            with open(csv_path, "w", newline="") as f:
+                csv.DictWriter(f, fieldnames=gi.CSV_FIELDS).writeheader()
+
+    gi.PROFILES_FILE.write_text(__import__("json").dumps(data, indent=2))
+    flash(f"Profile '{profile_id}' {'created' if is_new else 'updated'}.", "success")
+    return redirect(url_for("settings"))
+
+
+@app.route("/settings/bank/<profile_id>", methods=["POST"])
+def settings_bank(profile_id):
+    """Save bank details for a profile directly to the system keychain.
+    Values are never written to any file — keyring handles secure storage."""
+    data = gi.load_profiles()
+    if profile_id not in data.get("profiles", {}):
+        abort(404)
+
+    # Only update fields that were actually submitted (non-empty).
+    for field, key in [
+        ("bsb", f"{profile_id}:bsb"),
+        ("account_number", f"{profile_id}:account_number"),
+        ("account_name", f"{profile_id}:account_name"),
+    ]:
+        value = request.form.get(field, "").strip()
+        if value:
+            keyring.set_password("abn-invoice", key, value)
+
+    flash("Bank details saved to keychain.", "success")
+    return redirect(url_for("settings"))
+
+
+@app.route("/settings/switch/<profile_id>", methods=["POST"])
+def settings_switch(profile_id):
+    """Switch the active profile and reload module globals."""
+    data = gi.load_profiles()
+    if profile_id not in data.get("profiles", {}):
+        abort(404)
+    data["active"] = profile_id
+    gi.PROFILES_FILE.write_text(__import__("json").dumps(data, indent=2))
+    gi._reload_profile()
+    flash(f"Switched to profile '{data['profiles'][profile_id]['name']}'.", "success")
+    return redirect(url_for("index"))
+
+
+@app.route("/settings/profile/<profile_id>/delete", methods=["POST"])
+def settings_delete_profile(profile_id):
+    """Remove a profile from profiles.json and clear its keychain entries.
+    The data directory (transactions, PDFs) is NOT deleted — only the profile record."""
+    data = gi.load_profiles()
+    profiles = data.get("profiles", {})
+    if profile_id not in profiles:
+        abort(404)
+    if profile_id == data.get("active"):
+        flash("Switch to a different profile before deleting the active one.", "error")
+        return redirect(url_for("settings"))
+    if len(profiles) <= 1:
+        flash("Cannot delete the only profile.", "error")
+        return redirect(url_for("settings"))
+
+    for key in ["bsb", "account_number", "account_name"]:
+        try:
+            keyring.delete_password("abn-invoice", f"{profile_id}:{key}")
+        except Exception:
+            pass  # already absent
+
+    del profiles[profile_id]
+    gi.PROFILES_FILE.write_text(__import__("json").dumps(data, indent=2))
+    flash(
+        f"Profile '{profile_id}' deleted. Data in data/{profile_id}/ is untouched.",
+        "success",
+    )
+    return redirect(url_for("settings"))
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 
@@ -251,7 +406,7 @@ def main():
     args = parser.parse_args()
 
     if not args.no_open:
-        # Open browser after a short delay so Flask has time to start
+
         def _open_browser():
             import time
 

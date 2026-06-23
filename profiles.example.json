@@ -1,0 +1,9 @@
+{
+  "active": "default",
+  "profiles": {
+    "default": {
+      "name": "Your Full Name",
+      "abn": "XX XXX XXX XXX"
+    }
+  }
+}

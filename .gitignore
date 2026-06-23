@@ -1,9 +1,10 @@
 # Personal data — never commit these
-config.py
-transactions.csv
-Invoices/*
-!Invoices/.gitkeep
-logs/
+profiles.json
+data/*
+!data/.gitkeep
+
+# Python virtual environment
+.venv/
 
 # macOS
 .DS_Store

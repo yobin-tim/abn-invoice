@@ -1,6 +1,6 @@
 # abn-invoice
 
-A minimal Python tool for generating invoices and reimbursement claims as PDFs, with a local browser UI and a CSV-backed transaction ledger.
+A local tool for generating invoices and reimbursement claims as PDFs, with a browser UI and a CSV-backed transaction ledger.
 
 Designed for Australian sole traders who are **not GST-registered** (annual turnover below $75,000). Compliant with ATO invoice requirements for non-registered entities.
 
@@ -8,43 +8,47 @@ Designed for Australian sole traders who are **not GST-registered** (annual turn
 
 ## First-time setup
 
-**Requirements**: macOS, Python (Anaconda/conda recommended), Google Chrome, [poppler](https://poppler.freedesktop.org/) (`brew install poppler` for `pdfunite`).
+**Requirements**: macOS (recommended), Python 3.11+, Google Chrome, [poppler](https://poppler.freedesktop.org/) (`brew install poppler` for receipt merging).
+
+**Recommended**: install [uv](https://docs.astral.sh/uv/) for automatic dependency management:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
 ```bash
 # 1. Clone
 git clone https://github.com/YOUR_USERNAME/abn-invoice.git
 cd abn-invoice
 
-# 2. Identity — copy example and edit with your name and ABN
-cp config.example.py config.py
-# Edit config.py: set MY_NAME and MY_ABN
-
-# 3. Transactions ledger — copy sample and edit or start fresh
-cp transactions.sample.csv transactions.csv
-
-# 4. Bank details — stored in macOS Keychain, never in code
-tokens add ABN_Westpac_BSB
-tokens add ABN_Westpac_Account_Number
-tokens add ABN_Westpac_Account_Name
-# (the tokens utility: https://github.com/YOUR_USERNAME/scripts)
-
-# 5. Make the wrapper executable
-chmod +x invoice
+# 2. Run the setup script — it handles everything interactively
+bash setup.sh
 ```
 
-> `config.py` and `transactions.csv` are gitignored. Your ABN, name, client names, and amounts never appear in git history.
+`setup.sh` will:
+- Install Python dependencies into a local `.venv/`
+- Prompt for your name, ABN, and a profile ID
+- Create `profiles.json` and your data directory (`data/<profile_id>/`)
+
+**3. Set bank details** — after setup, start the app and go to Settings:
+```bash
+./invoice serve
+# Open http://localhost:5001 → Settings → Bank details
+```
+BSB and account number are stored in your system keychain (macOS Keychain / Windows Credential Manager) — never in any file.
+
+> `profiles.json` and `data/` are gitignored. Your name, ABN, client names, amounts, and bank details never appear in git history.
 
 ---
 
 ## Usage
 
-### Browser UI (recommended)
+### Browser UI (recommended for most tasks)
 
 ```bash
 ./invoice serve
 ```
 
-Opens `http://localhost:5001` in your browser. From there you can view, add, and edit transactions, generate PDFs, and view them inline.
+Opens `http://localhost:5001`. From there you can view, add, and edit transactions, generate PDFs, view them inline, and manage profiles and bank details in Settings.
 
 ### CLI
 
@@ -72,27 +76,39 @@ Opens `http://localhost:5001` in your browser. From there you can view, add, and
 
 ---
 
+## Profiles
+
+A profile is a named trading identity with its own transaction ledger, invoices folder, and bank details. Most people will only need one.
+
+To add a second profile (e.g. a separate ABN, company, or bank account), go to Settings in the webapp. Each profile stores its data in `data/<profile_id>/`.
+
+---
+
 ## Folder structure
 
 ```
 abn-invoice/
-├── config.py               YOUR identity: MY_NAME, MY_ABN  [gitignored]
-├── config.example.py       template — copy to config.py
+├── profiles.json           YOUR profiles: name, ABN  [gitignored]
+├── profiles.example.json   template — reference for the profiles.json format
+├── data/                   YOUR transaction data  [gitignored]
+│   └── <profile_id>/
+│       ├── transactions.csv
+│       ├── Invoices/       generated PDFs and HTMLs
+│       │   └── 25-26/      ATO financial year ending 30 June 2026
+│       └── logs/
+│           └── render.log  JSON-lines audit trail
 ├── generate_invoice.py     core CLI tool
 ├── serve.py                local Flask webapp
 ├── invoice                 shell wrapper (use this, not python directly)
+├── setup.sh                first-time setup script
+├── pyproject.toml          Python dependencies (managed by uv)
 ├── templates/
 │   ├── invoice.html.j2     Jinja2 template for both document types
 │   └── ui/                 webapp HTML templates
-├── transactions.csv        YOUR ledger  [gitignored]
-├── transactions.sample.csv example with placeholder data
-├── Invoices/               generated PDFs and HTMLs  [gitignored]
-│   └── 25-26/              ATO financial year ending 30 June 2026
-└── logs/
-    └── render.log          JSON-lines audit trail  [gitignored]
+└── transactions.sample.csv example with placeholder data
 ```
 
-Generated PDFs land in `Invoices/<FY>/` where `<FY>` is the ATO financial year the invoice date falls in (1 July – 30 June). Folder labels use two-digit form: `25-26` means FY ending 30 June 2026.
+Generated PDFs land in `data/<profile_id>/Invoices/<FY>/` where `<FY>` is the ATO financial year the invoice date falls in (1 July to 30 June). Folder labels use two-digit form: `25-26` means FY ending 30 June 2026.
 
 ---
 
@@ -119,13 +135,9 @@ Invoice numbers use the issue year: `INV-YYYY-NNN` (service) or `REIMB-YYYY-NNN`
 
 ## Bank details
 
-Bank details are stored in macOS Keychain via the [tokens](https://github.com/YOUR_USERNAME/scripts) utility. They are never hardcoded. To re-register:
+Bank details are stored in your system keychain via the [keyring](https://pypi.org/project/keyring/) library. They are never written to any file. Set them in the webapp under Settings → Bank details.
 
-```bash
-tokens add ABN_Westpac_BSB
-tokens add ABN_Westpac_Account_Number
-tokens add ABN_Westpac_Account_Name
-```
+Keychain service name: `abn-invoice`. Keys follow the pattern `<profile_id>:bsb`, `<profile_id>:account_number`, `<profile_id>:account_name`.
 
 ---
 
@@ -141,13 +153,13 @@ tokens add ABN_Westpac_Account_Name
 
 ## Audit log
 
-Every render attempt is appended to `logs/render.log` as JSON-lines:
+Every render attempt is appended to `data/<profile_id>/logs/render.log` as JSON-lines:
 
 ```json
-{"ts":"2026-06-22T18:31:02+10:00","run_id":"20260622-183102","invoice":"INV-2026-001","status":"ok","pdf":"Invoices/25-26/INV-2026-001.pdf","bytes":71234,"elapsed_ms":1200,"selector":"--new"}
+{"ts":"2026-06-22T18:31:02+10:00","run_id":"20260622-183102","invoice":"INV-2026-001","status":"ok","pdf":"data/yobin/Invoices/25-26/INV-2026-001.pdf","bytes":71234,"elapsed_ms":1200,"selector":"--new"}
 ```
 
-`run_id` groups a batch run. `grep '"run_id":"20260622-183102"' logs/render.log` gives every row from that batch.
+`run_id` groups a batch run. `grep '"run_id":"20260622-183102"' render.log` gives every row from that batch.
 
 ---
 

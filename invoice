@@ -1,12 +1,19 @@
 #!/bin/zsh
-# Wrapper: runs scripts under the conda base env where jinja2 and flask live.
-# Usage: ./invoice generate INV-2026-001
-#        ./invoice add
-#        ./invoice status [--stale-days N]
-#        ./invoice serve [--port 5001]
+# Wrapper: finds the best available Python and dispatches to the right script.
+# Priority: .venv (uv) > conda base > system python3
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [[ -x "$SCRIPT_DIR/.venv/bin/python3" ]]; then
+  PYTHON="$SCRIPT_DIR/.venv/bin/python3"
+elif [[ -x "/opt/anaconda3/bin/python3" ]]; then
+  PYTHON="/opt/anaconda3/bin/python3"
+else
+  PYTHON="python3"
+fi
+
 if [[ "$1" == "serve" ]]; then
   shift
-  exec /opt/anaconda3/bin/python3 "$(dirname "$0")/serve.py" "$@"
+  exec "$PYTHON" "$SCRIPT_DIR/serve.py" "$@"
 else
-  exec /opt/anaconda3/bin/python3 "$(dirname "$0")/generate_invoice.py" "$@"
+  exec "$PYTHON" "$SCRIPT_DIR/generate_invoice.py" "$@"
 fi

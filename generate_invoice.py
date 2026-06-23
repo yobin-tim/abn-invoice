@@ -2,8 +2,7 @@
 """
 ABN invoice and reimbursement-claim tool.
 
-Dependencies: jinja2 — available in conda base; use the ./invoice wrapper which
-points at /opt/anaconda3/bin/python3 automatically.
+Dependencies: flask, jinja2, keyring — install with: uv sync
 
 Commands
 --------
@@ -22,12 +21,10 @@ Examples
     ./invoice status --stale-days 30
     ./invoice add
 
-Bank details are fetched from macOS Keychain via the tokens utility:
-    tokens add ABN_Westpac_BSB
-    tokens add ABN_Westpac_Account_Number
-    tokens add ABN_Westpac_Account_Name
+Identity and bank details are stored in profiles.json (non-secret fields)
+and the system keychain (BSB, account number). Run ./setup.sh on first use.
 
-Audit log: ABN/logs/render.log (JSON-lines, append-only).
+Audit log: data/<profile>/logs/render.log (JSON-lines, append-only).
 """
 
 import sys
@@ -37,33 +34,74 @@ import time
 import argparse
 import subprocess
 import tempfile
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
 try:
     from jinja2 import Environment, FileSystemLoader
-except ImportError:
-    sys.exit("Missing dependency — run: uv pip install jinja2")
-
-sys.path.insert(0, "/Users/yobintimilsena/scripts")
-from tokens import get_token
+    import keyring
+except ImportError as e:
+    sys.exit(f"Missing dependency ({e}) — run: uv sync")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
 BASE_DIR = Path(__file__).parent
-TRANSACTIONS = BASE_DIR / "transactions.csv"
 TEMPLATES_DIR = BASE_DIR / "templates"
-INVOICES_DIR = BASE_DIR / "Invoices"
-
-try:
-    from config import MY_NAME, MY_ABN
-except ImportError:
-    sys.exit(
-        "Error: config.py not found.\n"
-        "Copy config.example.py to config.py and set MY_NAME and MY_ABN."
-    )
-
+PROFILES_FILE = BASE_DIR / "profiles.json"
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+# Profile-dependent module globals — initialised by _reload_profile() below.
+# Call _reload_profile() again after switching the active profile (serve.py does this).
+MY_NAME: str = ""
+MY_ABN: str = ""
+TRANSACTIONS: Path = BASE_DIR / "transactions.csv"  # placeholder; overridden at startup
+INVOICES_DIR: Path = BASE_DIR / "Invoices"  # placeholder; overridden at startup
+LOG_DIR: Path = BASE_DIR / "logs"  # placeholder; overridden at startup
+LOG_FILE: Path = BASE_DIR / "logs" / "render.log"  # placeholder; overridden at startup
+
+
+def load_profiles() -> dict:
+    """Load profiles.json. Exits with a clear message if the file is missing."""
+    if not PROFILES_FILE.exists():
+        sys.exit(
+            "Error: profiles.json not found.\n"
+            "Run ./setup.sh to create your first profile, or open the webapp."
+        )
+    with open(PROFILES_FILE) as f:
+        return json.load(f)
+
+
+def get_active_profile() -> tuple[str, dict]:
+    """Return (profile_id, profile_dict) for the currently active profile."""
+    data = load_profiles()
+    pid = data.get("active", "")
+    profiles = data.get("profiles", {})
+    if pid not in profiles:
+        sys.exit(
+            f"Error: active profile '{pid}' not found in profiles.json.\n"
+            f"Available: {', '.join(profiles) or '(none)'}"
+        )
+    return pid, profiles[pid]
+
+
+def _reload_profile() -> None:
+    """Update module globals from the current active profile.
+    Called at import time and by serve.py after the user switches profiles."""
+    global MY_NAME, MY_ABN, TRANSACTIONS, INVOICES_DIR, LOG_DIR, LOG_FILE
+    pid, profile = get_active_profile()
+    MY_NAME = profile.get("name", "")
+    MY_ABN = profile.get("abn", "")
+    data_dir = BASE_DIR / "data" / pid
+    data_dir.mkdir(parents=True, exist_ok=True)
+    TRANSACTIONS = data_dir / "transactions.csv"
+    INVOICES_DIR = data_dir / "Invoices"
+    LOG_DIR = data_dir / "logs"
+    LOG_FILE = data_dir / "logs" / "render.log"
+
+
+# Initialise from profiles.json at import time.
+_reload_profile()
 
 # CSV column order — kept explicit so appended rows serialise correctly
 CSV_FIELDS = [
@@ -86,22 +124,23 @@ CSV_FIELDS = [
 
 
 def get_bank_details() -> dict:
-    """Pull bank details from macOS Keychain; never hardcoded in this file."""
-    keys = {
-        "bsb": "ABN_Westpac_BSB",
-        "account": "ABN_Westpac_Account_Number",
-        "account_name": "ABN_Westpac_Account_Name",
+    """Pull bank details from the system keychain for the active profile.
+    Values are stored under service 'abn-invoice', never hardcoded in any file."""
+    pid, _ = get_active_profile()
+    fields = {
+        "bsb": f"{pid}:bsb",
+        "account": f"{pid}:account_number",
+        "account_name": f"{pid}:account_name",
     }
     result = {}
-    for field, token_name in keys.items():
-        try:
-            result[field] = get_token(token_name)
-        except Exception as e:
+    for field, key in fields.items():
+        value = keyring.get_password("abn-invoice", key)
+        if not value:
             sys.exit(
-                f"Error: bank detail '{token_name}' missing from Keychain.\n"
-                f"Run: tokens add {token_name}\n"
-                f"(Original error: {e})"
+                f"Error: bank detail '{key}' missing from keychain.\n"
+                f"Open the webapp → Settings → Bank details to set it."
             )
+        result[field] = value
     return result
 
 
@@ -224,9 +263,6 @@ def validate_row(tx: dict) -> list[str]:
 
 
 # ── Audit log ────────────────────────────────────────────────────────────────
-
-LOG_DIR = BASE_DIR / "logs"
-LOG_FILE = LOG_DIR / "render.log"
 
 
 class RunLog:

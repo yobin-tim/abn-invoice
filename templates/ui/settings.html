@@ -1,0 +1,153 @@
+{% extends "ui/base.html" %}
+{% block title %}Settings — ABN Invoices{% endblock %}
+
+{% block content %}
+<h2>Settings</h2>
+
+{# ── Existing profiles ──────────────────────────────────────────────────────── #}
+<section>
+  <h3>Profiles</h3>
+  <p class="hint" style="margin-bottom:1rem">
+    Each profile is a separate trading identity with its own transaction ledger,
+    invoices folder, and bank details. Switch profiles to work under a different name or ABN.
+  </p>
+
+  {% for pid, profile in profiles.items() %}
+  {% set bs = bank_status[pid] %}
+  <div class="profile-card">
+    <header>
+      <div>
+        <strong>{{ profile.name }}</strong>
+        {% if pid == active %}
+          <span class="badge badge-active" style="margin-left:.4rem">active</span>
+        {% endif %}
+        <br>
+        <span class="hint">ABN {{ profile.abn }} &nbsp;·&nbsp; ID: <code>{{ pid }}</code></span>
+      </div>
+      <div style="display:flex;gap:.5rem;margin-left:1rem;flex-shrink:0">
+        {% if pid != active %}
+          <form method="post" action="{{ url_for('settings_switch', profile_id=pid) }}">
+            <button type="submit" class="outline" style="padding:.3rem .75rem;font-size:.85rem;margin:0">
+              Switch here
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </header>
+
+    {# Edit name / ABN #}
+    <details>
+      <summary>Edit name / ABN</summary>
+      <form method="post" action="{{ url_for('settings_profile') }}" style="margin-top:.75rem">
+        <input type="hidden" name="profile_id" value="{{ pid }}">
+        <input type="hidden" name="is_new" value="0">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <label>
+            Name
+            <input type="text" name="name" value="{{ profile.name }}" required>
+          </label>
+          <label>
+            ABN
+            <input type="text" name="abn" value="{{ profile.abn }}"
+                   placeholder="XX XXX XXX XXX" required>
+          </label>
+        </div>
+        <button type="submit" style="margin-top:.5rem">Save changes</button>
+      </form>
+    </details>
+
+    {# Bank details #}
+    <details>
+      <summary>
+        Bank details
+        {% if bs.bsb_set and bs.account_set %}
+          <span class="bank-status-ok" style="font-size:.82rem">
+            — {{ bs.bsb_hint }}, {{ bs.account_hint }}
+            {% if bs.account_name %}({{ bs.account_name }}){% endif %}
+          </span>
+        {% else %}
+          <span class="bank-status-missing" style="font-size:.82rem"> — not set</span>
+        {% endif %}
+      </summary>
+      <form method="post" action="{{ url_for('settings_bank', profile_id=pid) }}"
+            style="margin-top:.75rem">
+        <p class="hint" style="margin-bottom:.75rem">
+          Stored securely in your system keychain — never written to any file on disk.
+          Leave a field blank to keep the existing value.
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+          <label>
+            BSB
+            <input type="password" name="bsb" autocomplete="off"
+                   placeholder="{{ bs.bsb_hint or 'e.g. 032-002' }}">
+            <small>Your bank's branch number</small>
+          </label>
+          <label>
+            Account number
+            <input type="password" name="account_number" autocomplete="off"
+                   placeholder="{{ bs.account_hint or 'e.g. 123456789' }}">
+          </label>
+          <label>
+            Account name
+            <input type="text" name="account_name"
+                   value="{{ bs.account_name }}"
+                   placeholder="Name on the account">
+          </label>
+        </div>
+        <button type="submit" style="margin-top:.5rem">Save to keychain</button>
+      </form>
+    </details>
+
+    {# Delete profile — only for non-active profiles #}
+    {% if pid != active %}
+    <details>
+      <summary style="color:#b91c1c">Delete this profile</summary>
+      <p class="hint" style="margin:.5rem 0">
+        Removes this profile and its keychain entries. The transaction data in
+        <code>data/{{ pid }}/</code> is <strong>not</strong> deleted — you can recover it manually.
+      </p>
+      <form method="post"
+            action="{{ url_for('settings_delete_profile', profile_id=pid) }}"
+            onsubmit="return confirm('Delete profile {{ pid }}? This cannot be undone.')">
+        <button type="submit" class="secondary outline"
+                style="padding:.3rem .75rem;font-size:.85rem;margin:0">
+          Delete profile
+        </button>
+      </form>
+    </details>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+</section>
+
+{# ── Add a new profile ──────────────────────────────────────────────────────── #}
+<section style="margin-top:2rem">
+  <h3>Add a new profile</h3>
+  <p class="hint" style="margin-bottom:1rem">
+    A new profile gets its own empty transaction ledger.
+    Set the bank details after creating it using the section above.
+  </p>
+  <form method="post" action="{{ url_for('settings_profile') }}">
+    <input type="hidden" name="is_new" value="1">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+      <label>
+        Profile ID
+        <input type="text" name="profile_id" placeholder="e.g. consulting" required
+               pattern="[a-z0-9_-]+" title="Lowercase letters, numbers, hyphens, or underscores only">
+        <small>Lowercase, no spaces — used as a folder name</small>
+      </label>
+      <label>
+        Your name (as it appears on invoices)
+        <input type="text" name="name" placeholder="Your Full Name" required>
+      </label>
+      <label>
+        Your ABN
+        <input type="text" name="abn" placeholder="XX XXX XXX XXX" required>
+      </label>
+    </div>
+    <button type="submit" style="margin-top:.75rem">Create profile</button>
+  </form>
+</section>
+
+{% endblock %}
