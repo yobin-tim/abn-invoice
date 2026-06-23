@@ -30,7 +30,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/abn-invoice.git
+git clone https://github.com/yobin-tim/abn-invoice.git
 cd abn-invoice
 
 # 2. Run the setup script — handles everything interactively

@@ -7,18 +7,27 @@ echo ""
 echo "=== ABN Invoice — First-time setup ==="
 echo ""
 
+# Guard: must be run from the repo root (where 'invoice' lives).
+if [[ ! -f "invoice" ]]; then
+    echo "ERROR: Run this script from the abn-invoice directory:"
+    echo "       cd abn-invoice && bash setup.sh"
+    exit 1
+fi
+
+INSTALL_DIR="$(pwd)"
+
 # ── 1. Make the invoice wrapper executable ──────────────────────────────────
 chmod +x invoice
-echo "[1/4] Made ./invoice executable."
+echo "[1/5] Made ./invoice executable."
 
 # ── 2. Install Python dependencies ──────────────────────────────────────────
 if command -v uv &>/dev/null; then
-    echo "[2/4] Installing Python dependencies with uv..."
+    echo "[2/5] Installing Python dependencies with uv..."
     uv sync --quiet
-    PYTHON="$(pwd)/.venv/bin/python3"
+    PYTHON="$INSTALL_DIR/.venv/bin/python3"
     echo "      Done. Virtual environment created in .venv/"
 else
-    echo "[2/4] uv not found."
+    echo "[2/5] uv not found."
     echo "      Recommended: install uv with the following command, then re-run setup.sh"
     echo "      curl -LsSf https://astral.sh/uv/install.sh | sh"
     echo ""
@@ -28,7 +37,7 @@ else
 fi
 
 # ── 3. Check optional system dependencies ───────────────────────────────────
-echo "[3/4] Checking system dependencies..."
+echo "[3/5] Checking system dependencies..."
 if [[ "$(uname)" == "Darwin" ]]; then
     CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     if [[ -x "$CHROME_PATH" ]]; then
@@ -38,7 +47,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
         echo "               Install from https://www.google.com/chrome/"
     fi
     if command -v pdfunite &>/dev/null; then
-        echo "      pdfunite: found."
+        echo "      pdfunite (poppler): found."
     else
         echo "      WARNING: pdfunite not found. Receipt merging will not work."
         echo "               Install with: brew install poppler"
@@ -47,7 +56,7 @@ fi
 
 # ── 4. Create your first profile ────────────────────────────────────────────
 echo ""
-echo "[4/4] Set up your first profile."
+echo "[4/5] Set up your first profile."
 echo "      You can add more profiles later via the webapp (Settings)."
 echo ""
 
@@ -98,13 +107,25 @@ print(f"      Profile '{pid}' created.")
 print(f"      Transaction ledger: data/{pid}/transactions.csv")
 PYEOF
 
+# ── 5. Smoke test — confirm all Python dependencies import correctly ─────────
+echo ""
+echo "[5/5] Verifying Python dependencies..."
+if "$PYTHON" -c "import flask, jinja2, keyring" 2>/dev/null; then
+    echo "      All dependencies OK."
+else
+    echo "      WARNING: One or more dependencies failed to import."
+    echo "               Run: pip install flask jinja2 keyring"
+fi
+
 echo ""
 echo "=== Setup complete! ==="
 echo ""
-echo "Next step: set your bank details (BSB, account number)."
+echo "Next step: set your bank details (BSB, account number, account name)."
 echo "These are stored securely in your system keychain — never in any file."
 echo ""
-echo "  1. Start the app:  ./invoice serve"
-echo "  2. Open:           http://localhost:5001"
-echo "  3. Go to Settings and expand 'Bank details' to enter them."
+echo "To start the app:"
+echo "  • Double-click 'Start ABN Invoices.command' in Finder"
+echo "  • Or from Terminal: ./invoice serve"
+echo ""
+echo "Then go to Settings → Bank details to enter your bank account."
 echo ""
