@@ -1,7 +1,11 @@
 # Personal data — never commit these
 profiles.json
+config.py
 data/*
 !data/.gitkeep
+logs/
+.ruff_cache/
+*.local.md
 
 # Python virtual environment
 .venv/
